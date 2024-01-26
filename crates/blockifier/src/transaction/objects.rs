@@ -98,7 +98,7 @@ pub struct ResourcesMapping(pub HashMap<String, u64>);
 #[cfg(feature = "parity-scale-codec")]
 impl Encode for ResourcesMapping {
     fn size_hint(&self) -> usize {
-        self.0.len() * core::mem::size_of::<u64>()
+        self.0.len() * (core::mem::size_of::<String>() + core::mem::size_of::<u64>())
     }
 
     fn encode(&self) -> Vec<u8> {
@@ -112,5 +112,23 @@ impl Decode for ResourcesMapping {
         input: &mut I,
     ) -> Result<Self, parity_scale_codec::Error> {
         Ok(ResourcesMapping(HashMap::from_iter(<Vec<(String, u64)>>::decode(input)?)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resources_mapping_encode_decode() {
+        let mut resources_mapping = ResourcesMapping::default();
+        resources_mapping.0.insert("l1_gas_usage".to_string(), 21000);
+        resources_mapping.0.insert("overal_fee".to_string(), 420);
+        resources_mapping.0.insert("n_steps".to_string(), 300);
+
+        let encoded = resources_mapping.encode();
+        let decoded = ResourcesMapping::decode(&mut &encoded[..]).unwrap();
+
+        assert_eq!(resources_mapping, decoded);
     }
 }

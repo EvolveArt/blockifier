@@ -4,7 +4,6 @@ use std::collections::hash_map::RandomState as HasherBuilder;
 use derive_more::IntoIterator;
 #[cfg(not(feature = "std"))]
 use hashbrown::hash_map::DefaultHashBuilder as HasherBuilder;
-use indexmap::IndexMap;
 #[cfg(feature = "scale-info")]
 use scale_info::{build::Fields, Path, Type, TypeInfo};
 use serde::{Deserialize, Serialize};
@@ -312,11 +311,7 @@ impl<S: StateReader> State for CachedState<S> {
 
     // Assumes calling to `count_actual_state_changes` before. See its documentation.
     fn to_state_diff(&self) -> CommitmentStateDiff {
-        type StorageDiff = IndexMap<
-            ContractAddress,
-            IndexMap<StorageKey, StarkFelt, HasherBuilder>,
-            HasherBuilder,
-        >;
+        type StorageDiff = HashMap<ContractAddress, HashMap<StorageKey, StarkFelt>>;
 
         let state_cache = &self.cache;
         let class_hash_updates = state_cache.get_class_hash_updates();
@@ -326,10 +321,10 @@ impl<S: StateReader> State for CachedState<S> {
         let declared_classes = state_cache.compiled_class_hash_writes.clone();
 
         CommitmentStateDiff {
-            address_to_class_hash: IndexMap::from_iter(class_hash_updates),
+            address_to_class_hash: HashMap::from_iter(class_hash_updates),
             storage_updates: StorageDiff::from(StorageView(storage_diffs)),
-            class_hash_to_compiled_class_hash: IndexMap::from_iter(declared_classes),
-            address_to_nonce: IndexMap::from_iter(nonces),
+            class_hash_to_compiled_class_hash: HashMap::from_iter(declared_classes),
+            address_to_nonce: HashMap::from_iter(nonces),
         }
     }
 }
@@ -353,7 +348,7 @@ pub struct StorageView(pub HashMap<ContractStorageKey, StarkFelt>);
 
 /// Converts a `CachedState`'s storage mapping into a `StateDiff`'s storage mapping.
 impl From<StorageView>
-    for IndexMap<ContractAddress, IndexMap<StorageKey, StarkFelt, HasherBuilder>, HasherBuilder>
+    for HashMap<ContractAddress, HashMap<StorageKey, StarkFelt, HasherBuilder>, HasherBuilder>
 {
     fn from(storage_view: StorageView) -> Self {
         let mut storage_updates = Self::with_capacity_and_hasher(0, HasherBuilder::default());
@@ -363,7 +358,7 @@ impl From<StorageView>
                 .and_modify(|map| {
                     map.insert(key, value);
                 })
-                .or_insert_with(|| IndexMap::from_iter([(key, value)]));
+                .or_insert_with(|| HashMap::from_iter([(key, value)]));
         }
 
         storage_updates
@@ -603,13 +598,12 @@ impl<'a, S: StateReader> TransactionalState<'a, S> {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CommitmentStateDiff {
     // Contract instance attributes (per address).
-    pub address_to_class_hash: IndexMap<ContractAddress, ClassHash, HasherBuilder>,
-    pub address_to_nonce: IndexMap<ContractAddress, Nonce, HasherBuilder>,
-    pub storage_updates:
-        IndexMap<ContractAddress, IndexMap<StorageKey, StarkFelt, HasherBuilder>, HasherBuilder>,
+    pub address_to_class_hash: HashMap<ContractAddress, ClassHash>,
+    pub address_to_nonce: HashMap<ContractAddress, Nonce>,
+    pub storage_updates: HashMap<ContractAddress, HashMap<StorageKey, StarkFelt>>,
 
     // Global attributes.
-    pub class_hash_to_compiled_class_hash: IndexMap<ClassHash, CompiledClassHash, HasherBuilder>,
+    pub class_hash_to_compiled_class_hash: HashMap<ClassHash, CompiledClassHash>,
 }
 
 #[cfg(feature = "parity-scale-codec")]
